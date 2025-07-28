@@ -1,51 +1,72 @@
-// ייבוא הספריות הדרושות
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-
-// יצירת אפליקציית שרת
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = process.env.PORT || 3000;
 
-// הפעלת CORS כדי לאפשר לאתר שלך לתקשר עם השרת הזה
 app.use(cors());
-// הגשה של קבצים סטטיים מהתיקייה הנוכחית (כדי להגיש את index.html)
-app.use(express.static('.'));
+app.use(express.json());
 
-// הגדרת נקודת קצה (endpoint) לבדיקת הסיבים
-app.get('/check-fiber', async (req, res) => {
-    const address = req.query.address;
-
+// נתיב לבדיקת סיבים אופטיים
+app.post('/check-fiber', async (req, res) => {
+    const { address } = req.body;
+    
     if (!address) {
-        return res.status(400).send({ error: 'Address query parameter is required' });
+        return res.status(400).json({ error: 'Address is required' });
     }
 
     try {
-        // הכתובת אליה השרת שלנו יפנה (השרת של ZOL)
-        const zolUrl = 'https://www.zol-li.co.il/wp-admin/admin-ajax.php';
-        
-        // הכנת הנתונים לשליחה בפורמט ש-ZOL מצפה לו
-        const params = new URLSearchParams();
-        params.append('action', 'fiber_address_check');
-        params.append('address', address);
+        // 1. ננסה לבדוק מול אתר בזק ישירות
+        let bezeqResult = null;
+        try {
+            const bezeqResponse = await axios.post(
+                'https://www.bezeq.co.il/internetandphone/internet/bfiber_addresscheck/checkAddress',
+                { address: address },
+                { headers: { 'Content-Type': 'application/json' } }
+            );
+            bezeqResult = bezeqResponse.data;
+        } catch (e) {
+            console.log('Bezeq direct API not available, using fallback');
+        }
 
-        // שליחת בקשת POST לשרת של ZOL
-        const response = await axios.post(zolUrl, params, {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
-            }
+        // 2. אם לא הצלחנו, נשתמש ב-ZOL כגיבוי
+        if (!bezeqResult) {
+            const zolResponse = await axios.post(
+                'https://www.zol-li.co.il/wp-admin/admin-ajax.php',
+                `action=fiber_address_check&address=${encodeURIComponent(address)}`,
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+            );
+            
+            const html = zolResponse.data;
+            const available = html.includes('fiber-result-available');
+            const speedMatch = html.match(/מהירות: ([^<]+)</);
+            const speed = speedMatch ? speedMatch[1] : 'עד 1Gbps';
+            
+            return res.json({
+                available,
+                speed,
+                message: available ? 'הכתובת זכאית לחיבור סיבים אופטיים' : 'הכתובת אינה זכאית לחיבור סיבים אופטיים כרגע',
+                link: `https://www.zol-li.co.il/fiber-address-check-bezeq/?address=${encodeURIComponent(address)}`
+            });
+        }
+
+        // 3. אם קיבלנו תשובה מבזק
+        return res.json({
+            available: bezeqResult.available,
+            speed: bezeqResult.speed || 'עד 1Gbps',
+            message: bezeqResult.message || (bezeqResult.available ? 'הכתובת זכאית לחיבור סיבים אופטיים' : 'הכתובת אינה זכאית כרגע'),
+            link: `https://www.bezeq.co.il/internetandphone/internet/bfiber_addresscheck/?address=${encodeURIComponent(address)}`
         });
-
-        // החזרת התשובה שקיבלנו מ-ZOL ישירות חזרה לאתר שלנו
-        res.send(response.data);
-
+        
     } catch (error) {
-        console.error('Error fetching fiber data:', error);
-        res.status(500).send({ error: 'Failed to fetch fiber availability' });
+        console.error('Error checking fiber:', error);
+        return res.status(500).json({
+            error: 'Failed to check fiber availability',
+            details: error.message
+        });
     }
 });
 
-// הפעלת השרת והאזנה לבקשות
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
 });
