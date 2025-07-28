@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ממיר קואורדינטות ובדיקת סיבים</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --background-color: #f0f2f5; --container-bg: #ffffff; --primary-text: #1d1d1f; --secondary-text: #6e6e73; --accent-color: #007aff; --accent-hover: #0071e3; --border-color: #d2d2d7; --shadow-color: rgba(0, 0, 0, 0.1); --success-color: #34c759; --error-color: #ff3b30;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--background-color); padding: 20px; margin: 0; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+        .container { background-color: var(--container-bg); border-radius: 20px; padding: 35px; box-shadow: 0 8px 32px var(--shadow-color); max-width: 700px; width: 100%; margin: 20px auto; }
+        h1 { color: var(--primary-text); text-align: center; font-size: 28px; font-weight: 600; margin-bottom: 30px; }
+        .input-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 10px; font-weight: 500; color: var(--secondary-text); font-size: 15px; }
+        input[type="text"] { width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 16px; background-color: #f9f9f9; transition: all 0.2s ease-in-out; direction: ltr; text-align: right; }
+        input[type="text"]:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2); background-color: #fff; }
+        .btn { background-color: var(--accent-color); color: white; border: none; padding: 16px 24px; font-size: 17px; font-weight: 500; border-radius: 12px; cursor: pointer; width: 100%; transition: background-color 0.2s ease-in-out; display: flex; justify-content: center; align-items: center; gap: 10px; }
+        .btn:hover { background-color: var(--accent-hover); }
+        .result-section { margin-top: 25px; padding-top: 25px; border-top: 1px solid var(--border-color); }
+        .section-title { font-weight: 600; font-size: 20px; color: var(--primary-text); margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .coordinates-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .coord-box { background-color: #f9f9f9; padding: 15px; border-radius: 12px; text-align: center; font-family: 'SF Mono', 'Courier New', monospace; font-size: 18px; }
+        .coord-box strong { display: block; font-size: 22px; color: var(--primary-text); margin-top: 5px; }
+        .map-container { width: 100%; height: 250px; border-radius: 12px; overflow: hidden; background-color: #e9ecef; margin-top: 20px; }
+        .details-box { background-color: #f9f9f9; border-radius: 12px; padding: 20px; font-size: 16px; }
+        .loading { text-align: center; margin: 20px 0; color: var(--secondary-text); display: none; }
+        .fiber-status { text-align: center; padding: 15px; border-radius: 10px; margin-top: 15px; }
+        .available { background-color: #e6f9ed; color: #1b5e20; border: 1px solid var(--success-color); }
+        .not-available { background-color: #fff0f0; color: #c62828; border: 1px solid var(--error-color); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-map-marked-alt"></i> ממיר קואורדינטות ובדיקת סיבים</h1>
+        <div class="input-group">
+            <label for="googleMapsUrl"><i class="fas fa-link"></i> הדבק קישור מ-Google Maps</label>
+            <input type="text" id="googleMapsUrl" placeholder="הדבק כאן את הקישור..." autocomplete="off">
+        </div>
+        <button class="btn" onclick="processRequest()"><i class="fas fa-sync-alt"></i> המרה ובדיקה</button>
+        <div class="loading" id="loading"><p>מבצע המרה ואחזור נתונים...</p></div>
+        <div id="results" style="display:none;">
+            <div class="result-section">
+                <h2 class="section-title"><i class="fas fa-compass"></i> קואורדינטות רשת ישראל החדשה (ITM)</h2>
+                <div class="coordinates-grid">
+                    <div class="coord-box">צפון (Y) <strong id="northResult"></strong></div>
+                    <div class="coord-box">מזרח (X) <strong id="eastResult"></strong></div>
+                </div>
+            </div>
+            <div class="result-section">
+                <h2 class="section-title"><i class="fas fa-map-pin"></i> תצוגת מפה</h2>
+                <div id="mapContainer" class="map-container"></div>
+            </div>
+            <div class="result-section">
+                <h2 class="section-title"><i class="fas fa-home"></i> פרטי כתובת</h2>
+                <div id="addressDetails" class="details-box"></div>
+            </div>
+            <div class="result-section">
+                <h2 class="section-title"><i class="fas fa-wifi"></i> בדיקת סיבים אופטיים של בזק</h2>
+                <div id="fiberResult" class="details-box">בודק זמינות...</div>
+            </div>
+        </div>
+    </div>
+    <script>
+        proj4.defs("ITM", "+proj=tmerc +lat_0=31.73439361111111 +lon_0=35.20451694444445 +k=1.0000067 +x_0=219529.584 +y_0=626907.39 +ellps=GRS80 +towgs84=-24.0024,-17.1032,-17.8444,-0.33009,-1.85269,1.66969,5.4248 +units=m +no_defs");
+        
+        async function checkFiberAvailability(fullAddress) {
+            const fiberResultDiv = document.getElementById('fiberResult');
+            fiberResultDiv.innerHTML = "בודק זמינות סיבים מול השרת...";
+
+            try {
+                const encodedAddress = encodeURIComponent(fullAddress);
+                // כאן הקסם קורה: אנחנו פונים לשרת שלנו, לא לשרת של ZOL
+                const response = await fetch(`/check-fiber?address=${encodedAddress}`);
+                const htmlResponse = await response.text();
+                
+                // ניתוח התשובה שקיבלנו מהשרת שלנו (שהיא התשובה מ-ZOL)
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlResponse, 'text/html');
+                
+                const availableDiv = doc.querySelector('.fiber-result-available');
+                const unavailableDiv = doc.querySelector('.fiber-result-unavailable');
+
+                if (availableDiv) {
+                    fiberResultDiv.innerHTML = `<div class="fiber-status available"><i class="fas fa-check-circle"></i> ${availableDiv.textContent.trim()}</div>`;
+                } else if (unavailableDiv) {
+                    fiberResultDiv.innerHTML = `<div class="fiber-status not-available"><i class="fas fa-times-circle"></i> ${unavailableDiv.textContent.trim()}</div>`;
+                } else {
+                    throw new Error('לא ניתן היה לנתח את התשובה מ-ZOL.');
+                }
+            } catch (error) {
+                console.error('שגיאה בבדיקת סיבים:', error);
+                fiberResultDiv.innerHTML = `<div class="fiber-status not-available"><i class="fas fa-exclamation-triangle"></i> שגיאה בבדיקה מול השרת.</div>`;
+            }
+        }
+
+        async function processRequest() {
+            const url = document.getElementById('googleMapsUrl').value.trim();
+            if (!url) { alert('נא להזין קישור מ-Google Maps'); return; }
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            try {
+                const coords = extractCoordinates(url);
+                const itmCoords = convertToITM(coords.lat, coords.lng);
+                document.getElementById('eastResult').innerText = itmCoords.east.toLocaleString();
+                document.getElementById('northResult').innerText = itmCoords.north.toLocaleString();
+                displayMap(coords.lat, coords.lng);
+                const address = await getAddress(coords.lat, coords.lng);
+                displayAddress(address);
+                await checkFiberAvailability(address.fullAddress); // קריאה לפונקציה החדשה
+                document.getElementById('results').style.display = 'block';
+            } catch (error) {
+                alert(`שגיאה בתהליך: ${error.message}`);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        function extractCoordinates(url) { const match = url.match(/@([-\d.]+),([-\d.]+)/); if (match && match[1] && match[2]) { return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) }; } throw new Error('לא נמצאו קואורדינטות בקישור.'); }
+        function convertToITM(lat, lng) { const wgs84 = 'EPSG:4326'; const itm = 'ITM'; const [east, north] = proj4(wgs84, itm, [lng, lat]); return { east: parseFloat(east.toFixed(2)), north: parseFloat(north.toFixed(2)) }; }
+        function displayMap(lat, lng) { const mapContainer = document.getElementById('mapContainer'); const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng-0.005},${lat-0.0025},${lng+0.005},${lat+0.0025}&layer=mapnik&marker=${lat},${lng}`; mapContainer.innerHTML = `<iframe width="100%" height="100%" frameborder="0" src="${embedUrl}" style="border: 1px solid black"></iframe>`; }
+        async function getAddress(lat, lng) { const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=he`); const data = await response.json(); if (data && data.display_name) { return { city: data.address.city || data.address.town || '', street: data.address.road || 'לא צוין', number: data.address.house_number || '', fullAddress: data.display_name }; } throw new Error('לא הצלחנו לאתר פרטי כתובת.'); }
+        function displayAddress(address) { const detailsContainer = document.getElementById('addressDetails'); detailsContainer.innerHTML = `<p><strong>עיר:</strong> ${address.city || 'לא נמצאה'}</p><p><strong>רחוב:</strong> ${address.street}</p><p><strong>מספר בית:</strong> ${address.number || 'לא צוין'}</p>`; }
+    </script>
+</body>
+</html>
