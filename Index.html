@@ -390,10 +390,10 @@
                 </div>
                 <div class="copy-buttons">
                     <button class="copy-btn" onclick="copyCoordinate('east')">
-                        <i class="far fa-copy"></i> העתק X
+                        <i class="far fa-copy"></i> העתק X (מספר שלם)
                     </button>
                     <button class="copy-btn" onclick="copyCoordinate('north')">
-                        <i class="far fa-copy"></i> העתק Y
+                        <i class="far fa-copy"></i> העתק Y (מספר שלם)
                     </button>
                 </div>
                 
@@ -450,7 +450,7 @@
         let currentAddress = '';
 
         // כתובת השרת ב-Render
-        const SERVER_URL = 'https://convert-kv7l.onrender.com';
+        const SERVER_URL = 'https://your-render-app.onrender.com';
 
         async function convertCoordinates() {
             const url = document.getElementById('googleMapsUrl').value.trim();
@@ -491,12 +491,16 @@
                 const itm = new proj4.Proj('ITM');
                 const result = proj4.transform(wgs84, itm, [lng, lat]);
 
-                currentEast = result.x.toFixed(2);
-                currentNorth = result.y.toFixed(2);
-
-                // הצגת התוצאות
-                document.getElementById('eastResult').innerHTML = `מזרח (X): <strong>${currentEast}</strong>`;
-                document.getElementById('northResult').innerHTML = `צפון (Y): <strong>${currentNorth}</strong>`;
+                // שמירת הערכים השלמים בלבד להעתקה
+                currentEast = Math.floor(result.x).toString();
+                currentNorth = Math.floor(result.y).toString();
+                
+                // הצגת התוצאות המלאות למשתמש (עם עשרוניות)
+                const displayEast = result.x.toFixed(2);
+                const displayNorth = result.y.toFixed(2);
+                
+                document.getElementById('eastResult').innerHTML = `מזרח (X): <strong>${displayEast}</strong>`;
+                document.getElementById('northResult').innerHTML = `צפון (Y): <strong>${displayNorth}</strong>`;
                 
                 // אחזור כתובת
                 await checkAddress(lat, lng);
@@ -572,7 +576,7 @@
                 
                 document.getElementById('bezeqLink').href = result.link || 'https://www.bezeq.co.il/internetandphone/internet/bfiber_addresscheck/';
             } catch (error) {
-                document.getElementById('fiberText').innerText = 'שגיאה בבדיקה';
+                document.getElementById('fiberText').innerText = 'שגיאה בשרת';
                 document.getElementById('fiberSpeed').innerText = error.message;
                 document.getElementById('fiberStatus').className = "fiber-status not-available";
             }
@@ -580,9 +584,8 @@
 
         function copyCoordinate(type) {
             const value = type === 'east' ? currentEast : currentNorth;
-            const cleanValue = value.replace('.', '');
             
-            navigator.clipboard.writeText(cleanValue).then(() => {
+            navigator.clipboard.writeText(value).then(() => {
                 showNotification(`הקואורדינטה ${type.toUpperCase()} הועתקה!`);
             }).catch(err => {
                 showNotification('שגיאה בהעתקה', true);
