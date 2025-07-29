@@ -448,9 +448,10 @@
         let currentLat = 0;
         let currentLng = 0;
         let currentAddress = '';
+        let currentAddressDetails = {};
 
-        // כתובת השרת ב-Render
-        const SERVER_URL = 'https://convert-kv7l.onrender.com';
+        // כתובת השרת
+        const SERVER_URL = window.location.origin;
 
         async function convertCoordinates() {
             const url = document.getElementById('googleMapsUrl').value.trim();
@@ -469,7 +470,7 @@
             try {
                 // חילוץ קואורדינטות מהקישור
                 let lat, lng;
-                const preciseMatch = url.match(/!3d([\d.]+)!4d([\d.]+)/);
+                const preciseMatch = url.match(/!3d([\d.-]+)!4d([\d.-]+)/);
                 if (preciseMatch) {
                     lat = parseFloat(preciseMatch[1]);
                     lng = parseFloat(preciseMatch[2]);
@@ -502,11 +503,11 @@
                 document.getElementById('eastResult').innerHTML = `מזרח (X): <strong>${displayEast}</strong>`;
                 document.getElementById('northResult').innerHTML = `צפון (Y): <strong>${displayNorth}</strong>`;
                 
-                // אחזור כתובת
-                await checkAddress(lat, lng);
+                // אחזור כתובת משופר
+                await checkAddressImproved(lat, lng);
                 
-                // בדיקת סיבים אופטיים
-                await checkFiberAvailability();
+                // בדיקת סיבים אופטיים משופרת
+                await checkFiberAvailabilityImproved();
                 
                 // הצגת התוצאות
                 document.getElementById('resultBox').style.display = 'block';
@@ -520,30 +521,57 @@
             }
         }
 
-        async function checkAddress(lat, lng) {
+        async function checkAddressImproved(lat, lng) {
             try {
-                const address = await getAddressFromCoords(lat, lng);
+                const response = await fetch(`${SERVER_URL}/get-address`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ lat, lng })
+                });
+                
+                const address = await response.json();
                 currentAddress = address.fullAddress;
+                currentAddressDetails = address;
                 
                 // עדכון פרטי הכתובת
-                document.getElementById('city').innerText = address.city || '-';
-                document.getElementById('street').innerText = address.street || '-';
-                document.getElementById('house').innerText = address.number || '-';
-                document.getElementById('zip').innerText = address.zip || '-';
+                document.getElementById('city').innerText = address.city || 'לא זוהה';
+                document.getElementById('street').innerText = address.street || 'לא זוהה';
+                document.getElementById('house').innerText = address.number || 'לא זוהה';
+                document.getElementById('zip').innerText = address.zip || 'לא זוהה';
+                
             } catch (error) {
-                showNotification(`שגיאה באחזור כתובת: ${error.message}`, true);
+                console.error('שגיאה באחזור כתובת:', error);
+                // Fallback לשירות גיאוקודינג בסיסי
+                try {
+                    const fallbackAddress = await getAddressFromCoordsFallback(lat, lng);
+                    currentAddress = fallbackAddress.fullAddress;
+                    currentAddressDetails = fallbackAddress;
+                    
+                    document.getElementById('city').innerText = fallbackAddress.city || 'לא זוהה';
+                    document.getElementById('street').innerText = fallbackAddress.street || 'לא זוהה';
+                    document.getElementById('house').innerText = fallbackAddress.number || 'לא זוהה';
+                    document.getElementById('zip').innerText = fallbackAddress.zip || 'לא זוהה';
+                } catch (fallbackError) {
+                    showNotification('שגיאה באחזור כתובת', true);
+                    document.getElementById('city').innerText = 'שגיאה';
+                    document.getElementById('street').innerText = 'שגיאה';
+                    document.getElementById('house').innerText = 'שגיאה';
+                    document.getElementById('zip').innerText = 'שגיאה';
+                }
             }
         }
 
-        async function getAddressFromCoords(lat, lng) {
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=he`);
+        async function getAddressFromCoordsFallback(lat, lng) {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=he&addressdetails=1&zoom=18`);
             const data = await response.json();
             
             if (data.address) {
                 return {
-                    street: data.address.road || '',
+                    street: data.address.road || data.address.pedestrian || '',
                     number: data.address.house_number || '',
-                    city: data.address.city || data.address.town || data.address.village || '',
+                    city: data.address.city || data.address.town || data.address.village || data.address.municipality || '',
                     zip: data.address.postcode || '',
                     fullAddress: data.display_name || ''
                 };
@@ -551,15 +579,19 @@
             throw new Error('לא נמצאו פרטי כתובת');
         }
 
-        async function checkFiberAvailability() {
+        async function checkFiberAvailabilityImproved() {
             try {
-                // נשלח את הכתובת לשרת שלנו ב-Render
                 const response = await fetch(`${SERVER_URL}/check-fiber`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ address: currentAddress })
+                    body: JSON.stringify({ 
+                        address: currentAddress,
+                        city: currentAddressDetails.city,
+                        street: currentAddressDetails.street,
+                        number: currentAddressDetails.number
+                    })
                 });
                 
                 const result = await response.json();
@@ -575,10 +607,12 @@
                 }
                 
                 document.getElementById('bezeqLink').href = result.link || 'https://www.bezeq.co.il/internetandphone/internet/bfiber_addresscheck/';
+                
             } catch (error) {
-                document.getElementById('fiberText').innerText = 'שגיאה בשרת';
-                document.getElementById('fiberSpeed').innerText = error.message;
+                document.getElementById('fiberText').innerText = 'שגיאה בבדיקת סיבים';
+                document.getElementById('fiberSpeed').innerText = 'נסה שוב מאוחר יותר';
                 document.getElementById('fiberStatus').className = "fiber-status not-available";
+                document.getElementById('bezeqLink').href = 'https://www.bezeq.co.il/internetandphone/internet/bfiber_addresscheck/';
             }
         }
 
