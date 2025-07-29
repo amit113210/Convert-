@@ -1,7 +1,7 @@
 {
   "name": "coordinate-converter",
   "version": "1.0.0",
-  "description": "Coordinate converter with Bezeq fiber check",
+  "description": "Coordinate converter with interactive map",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js"
