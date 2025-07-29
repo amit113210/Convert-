@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ממיר קואורדינטות מתקדם - בזק סיבים</title>
+    <title>ממיר קואורדינטות מתקדם</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root {
             --bg-color: #000000;
@@ -36,7 +38,7 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -193,7 +195,7 @@
             color: var(--primary-color);
         }
 
-        .address-result, .fiber-result {
+        .address-result, .map-result {
             margin-top: 30px;
             padding: 25px;
             border-radius: var(--border-radius);
@@ -204,13 +206,13 @@
             border-left: 4px solid var(--primary-color);
         }
 
-        .address-header, .fiber-header {
+        .address-header, .map-header {
             display: flex;
             align-items: center;
             margin-bottom: 20px;
         }
 
-        .address-header i, .fiber-header i {
+        .address-header i, .map-header i {
             font-size: 26px;
             margin-left: 15px;
             color: var(--primary-color);
@@ -235,48 +237,48 @@
             color: #86868b;
         }
 
-        .fiber-result {
+        .map-result {
             background: linear-gradient(90deg, #1a2c1d, #132318);
             border-left: 4px solid var(--success-color);
         }
 
-        .fiber-status {
-            font-size: 20px;
-            font-weight: 500;
-            text-align: center;
-            padding: 20px;
+        #map {
+            height: 300px;
+            width: 100%;
             border-radius: 12px;
-            margin: 20px 0;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid #3a3a3c;
+            margin-top: 15px;
         }
 
-        .available {
-            background: rgba(48, 209, 88, 0.15);
-            color: var(--success-color);
+        .map-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
         }
 
-        .not-available {
-            background: rgba(255, 69, 58, 0.15);
-            color: var(--error-color);
-        }
-
-        .bezeq-link {
-            display: block;
-            text-align: center;
-            margin-top: 20px;
-            padding: 16px;
-            background: var(--warning-color);
-            color: black;
-            border-radius: 12px;
-            text-decoration: none;
-            font-weight: 600;
+        .map-btn {
+            padding: 8px 16px;
+            background: #2c2c2e;
+            color: var(--text-color);
+            border: 1px solid #3a3a3c;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
             transition: var(--transition);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
         }
 
-        .bezeq-link:hover {
-            background: #ff9500;
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(255, 159, 10, 0.3);
+        .map-btn:hover {
+            background: #3a3a3c;
+            transform: translateY(-1px);
+        }
+
+        .map-btn i {
+            margin-left: 8px;
+            color: var(--primary-color);
         }
 
         .loading {
@@ -330,6 +332,25 @@
             font-size: 20px;
         }
 
+        /* Dark theme for Leaflet map */
+        .leaflet-tile {
+            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+        }
+
+        .leaflet-control-container .leaflet-control {
+            background: #2c2c2e;
+            border: 1px solid #3a3a3c;
+        }
+
+        .leaflet-control-container .leaflet-control a {
+            background: #2c2c2e;
+            color: var(--text-color);
+        }
+
+        .leaflet-control-container .leaflet-control a:hover {
+            background: #3a3a3c;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -355,6 +376,18 @@
             .logo {
                 font-size: 32px;
             }
+
+            #map {
+                height: 250px;
+            }
+
+            .map-controls {
+                flex-direction: column;
+            }
+
+            .map-btn {
+                justify-content: center;
+            }
         }
     </style>
 </head>
@@ -362,7 +395,7 @@
     <div class="container">
         <header>
             <div class="logo">Coordinate Pro</div>
-            <div class="subtitle">המרת קואורדינטות ובדיקת סיבים אופטיים בבזק</div>
+            <div class="subtitle">המרת קואורדינטות והצגת מיקום על המפה</div>
         </header>
 
         <div class="card">
@@ -372,7 +405,7 @@
             </div>
             
             <button class="btn" onclick="convertCoordinates()">
-                <i class="fas fa-sync-alt"></i> המר ובדוק סיבים
+                <i class="fas fa-sync-alt"></i> המר והצג על המפה
             </button>
             
             <div class="loading" id="loading">
@@ -422,18 +455,26 @@
                     </div>
                 </div>
                 
-                <div class="fiber-result">
-                    <div class="fiber-header">
-                        <i class="fas fa-bolt"></i>
-                        <h2>בדיקת סיבים אופטיים</h2>
+                <div class="map-result">
+                    <div class="map-header">
+                        <i class="fas fa-map-marked-alt"></i>
+                        <h2>מיקום על המפה</h2>
                     </div>
-                    <div class="fiber-status" id="fiberStatus">
-                        <div id="fiberText">הזן כתובת לבדיקה</div>
-                        <div id="fiberSpeed" style="margin-top: 10px; font-size: 16px;"></div>
+                    <div id="map"></div>
+                    <div class="map-controls">
+                        <a href="#" id="googleMapsLink" class="map-btn" target="_blank">
+                            <i class="fab fa-google"></i> פתח בגוגל מפות
+                        </a>
+                        <a href="#" id="wazeLink" class="map-btn" target="_blank">
+                            <i class="fas fa-route"></i> פתח ב-Waze
+                        </a>
+                        <button class="map-btn" onclick="centerMap()">
+                            <i class="fas fa-crosshairs"></i> מרכז מפה
+                        </button>
+                        <button class="map-btn" onclick="copyCoordinatesWGS84()">
+                            <i class="far fa-copy"></i> העתק קואורדינטות WGS84
+                        </button>
                     </div>
-                    <a href="#" id="bezeqLink" class="bezeq-link" target="_blank">
-                        <i class="fas fa-external-link-alt"></i> בדיקה נוספת באתר בזק
-                    </a>
                 </div>
             </div>
         </div>
@@ -449,6 +490,8 @@
         let currentLng = 0;
         let currentAddress = '';
         let currentAddressDetails = {};
+        let map = null;
+        let marker = null;
 
         // כתובת השרת
         const SERVER_URL = window.location.origin;
@@ -463,9 +506,6 @@
             // הצגת אנימציית טעינה והסתרת תוצאות קודמות
             document.getElementById('loading').style.display = 'block';
             document.getElementById('resultBox').style.display = 'none';
-            document.getElementById('fiberStatus').className = "fiber-status";
-            document.getElementById('fiberText').innerText = "מעבד...";
-            document.getElementById('fiberSpeed').innerText = "";
 
             try {
                 // חילוץ קואורדינטות מהקישור
@@ -503,25 +543,28 @@
                 document.getElementById('eastResult').innerHTML = `מזרח (X): <strong>${displayEast}</strong>`;
                 document.getElementById('northResult').innerHTML = `צפון (Y): <strong>${displayNorth}</strong>`;
                 
-                // אחזור כתובת משופר
-                await checkAddressImproved(lat, lng);
+                // אחזור כתובת
+                await checkAddress(lat, lng);
                 
-                // בדיקת סיבים אופטיים משופרת
-                await checkFiberAvailabilityImproved();
+                // יצירת מפה
+                initializeMap(lat, lng);
+                
+                // עדכון קישורים
+                updateMapLinks(lat, lng);
                 
                 // הצגת התוצאות
                 document.getElementById('resultBox').style.display = 'block';
                 
+                showNotification('המרה הושלמה בהצלחה!');
+                
             } catch (error) {
                 showNotification(`שגיאה: ${error.message}`, true);
-                document.getElementById('fiberText').innerText = `שגיאה: ${error.message}`;
-                document.getElementById('fiberStatus').className = "fiber-status not-available";
             } finally {
                 document.getElementById('loading').style.display = 'none';
             }
         }
 
-        async function checkAddressImproved(lat, lng) {
+        async function checkAddress(lat, lng) {
             try {
                 const response = await fetch(`${SERVER_URL}/get-address`, {
                     method: 'POST',
@@ -554,7 +597,6 @@
                     document.getElementById('house').innerText = fallbackAddress.number || 'לא זוהה';
                     document.getElementById('zip').innerText = fallbackAddress.zip || 'לא זוהה';
                 } catch (fallbackError) {
-                    showNotification('שגיאה באחזור כתובת', true);
                     document.getElementById('city').innerText = 'שגיאה';
                     document.getElementById('street').innerText = 'שגיאה';
                     document.getElementById('house').innerText = 'שגיאה';
@@ -579,74 +621,33 @@
             throw new Error('לא נמצאו פרטי כתובת');
         }
 
-        async function checkFiberAvailabilityImproved() {
-            try {
-                const response = await fetch(`${SERVER_URL}/check-fiber`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ 
-                        address: currentAddress,
-                        city: currentAddressDetails.city,
-                        street: currentAddressDetails.street,
-                        number: currentAddressDetails.number
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.available) {
-                    document.getElementById('fiberText').innerText = 'סיבים אופטיים זמינים!';
-                    document.getElementById('fiberSpeed').innerText = `מהירות: ${result.speed}`;
-                    document.getElementById('fiberStatus').className = "fiber-status available";
-                } else {
-                    document.getElementById('fiberText').innerText = 'סיבים אופטיים לא זמינים';
-                    document.getElementById('fiberSpeed').innerText = result.message || '';
-                    document.getElementById('fiberStatus').className = "fiber-status not-available";
-                }
-                
-                document.getElementById('bezeqLink').href = result.link || 'https://www.bezeq.co.il/internetandphone/internet/bfiber_addresscheck/';
-                
-            } catch (error) {
-                document.getElementById('fiberText').innerText = 'שגיאה בבדיקת סיבים';
-                document.getElementById('fiberSpeed').innerText = 'נסה שוב מאוחר יותר';
-                document.getElementById('fiberStatus').className = "fiber-status not-available";
-                document.getElementById('bezeqLink').href = 'https://www.bezeq.co.il/internetandphone/internet/bfiber_addresscheck/';
+        function initializeMap(lat, lng) {
+            // אם יש מפה קיימת, הסר אותה
+            if (map) {
+                map.remove();
             }
+
+            // יצירת מפה חדשה
+            map = L.map('map').setView([lat, lng], 16);
+
+            // הוספת שכבת רקע
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // הוספת סמן
+            marker = L.marker([lat, lng]).addTo(map)
+                .bindPopup(`<b>המיקום שנבחר</b><br>קואורדינטות: ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>${currentAddress || 'כתובת לא זמינה'}`)
+                .openPopup();
+
+            // הוספת עיגול להדגשת האזור
+            L.circle([lat, lng], {
+                color: '#0071e3',
+                fillColor: '#0071e3',
+                fillOpacity: 0.2,
+                radius: 50
+            }).addTo(map);
         }
 
-        function copyCoordinate(type) {
-            const value = type === 'east' ? currentEast : currentNorth;
-            
-            navigator.clipboard.writeText(value).then(() => {
-                showNotification(`הקואורדינטה ${type.toUpperCase()} הועתקה!`);
-            }).catch(err => {
-                showNotification('שגיאה בהעתקה', true);
-            });
-        }
-
-        function showNotification(message, isError = false) {
-            const notification = document.createElement('div');
-            notification.className = 'notification';
-            notification.innerHTML = `${message} <i class="fas fa-${isError ? 'exclamation-circle' : 'check'}"></i>`;
-            notification.style.background = isError ? 'linear-gradient(90deg, #ff453a, #d30f45)' : 'linear-gradient(90deg, #0071e3, #34c759)';
-            
-            document.body.appendChild(notification);
-            
-            // הופעה
-            setTimeout(() => {
-                notification.classList.add('show');
-            }, 10);
-            
-            // הסרה לאחר 3 שניות
-            setTimeout(() => {
-                notification.classList.remove('show');
-                setTimeout(() => {
-                    document.body.removeChild(notification);
-                }, 300);
-            }, 3000);
-        }
-    </script>
-</body>
-</html>
+        function updateMapLinks(lat, lng) {
+            // ע
