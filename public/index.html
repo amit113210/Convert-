@@ -650,4 +650,68 @@
         }
 
         function updateMapLinks(lat, lng) {
-            // ע
+            // עדכון קישור גוגל מפות
+            document.getElementById('googleMapsLink').href = `https://www.google.com/maps?q=${lat},${lng}`;
+            
+            // עדכון קישור Waze
+            document.getElementById('wazeLink').href = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+        }
+
+        function centerMap() {
+            if (map && currentLat && currentLng) {
+                map.setView([currentLat, currentLng], 16);
+                showNotification('המפה מוקדה למיקום');
+            }
+        }
+
+        function copyCoordinate(type) {
+            const value = type === 'east' ? currentEast : currentNorth;
+            
+            navigator.clipboard.writeText(value).then(() => {
+                showNotification(`הקואורדינטה ${type.toUpperCase()} הועתקה!`);
+            }).catch(err => {
+                showNotification('שגיאה בהעתקה', true);
+            });
+        }
+
+        function copyCoordinatesWGS84() {
+            const coordinates = `${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
+            
+            navigator.clipboard.writeText(coordinates).then(() => {
+                showNotification('קואורדינטות WGS84 הועתקו!');
+            }).catch(err => {
+                showNotification('שגיאה בהעתקה', true);
+            });
+        }
+
+        function showNotification(message, isError = false) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.innerHTML = `${message} <i class="fas fa-${isError ? 'exclamation-circle' : 'check'}"></i>`;
+            notification.style.background = isError ? 'linear-gradient(90deg, #ff453a, #d30f45)' : 'linear-gradient(90deg, #0071e3, #34c759)';
+            
+            document.body.appendChild(notification);
+            
+            // הופעה
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            
+            // הסרה לאחר 3 שניות
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+
+        // התחלה אוטומטית כאשר הדף נטען
+        document.addEventListener('DOMContentLoaded', function() {
+            // הוספת אירוע Enter לשדה הקלט
+            document.getElementById('googleMapsUrl').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    convertCoordinates();
+                }
+            });
+        });
