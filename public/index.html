@@ -497,6 +497,8 @@
         const SERVER_URL = window.location.origin;
 
         async function convertCoordinates() {
+            console.log('convertCoordinates called'); // דיבאג
+            
             const url = document.getElementById('googleMapsUrl').value.trim();
             if (!url) {
                 showNotification('נא להזין קישור גוגל מפות', true);
@@ -523,6 +525,8 @@
                         throw new Error('לא נמצאו קואורדינטות בקישור');
                     }
                 }
+                
+                console.log('Coordinates found:', lat, lng); // דיבאג
                 
                 currentLat = lat;
                 currentLng = lng;
@@ -558,6 +562,7 @@
                 showNotification('המרה הושלמה בהצלחה!');
                 
             } catch (error) {
+                console.error('Error in convertCoordinates:', error); // דיבאג
                 showNotification(`שגיאה: ${error.message}`, true);
             } finally {
                 document.getElementById('loading').style.display = 'none';
@@ -708,10 +713,33 @@
 
         // התחלה אוטומטית כאשר הדף נטען
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM Content Loaded'); // דיבאג
+            
             // הוספת אירוע Enter לשדה הקלט
             document.getElementById('googleMapsUrl').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     convertCoordinates();
                 }
             });
+            
+            // בדיקה ש-proj4 זמין
+            if (typeof proj4 === 'undefined') {
+                console.error('proj4 library not loaded');
+                showNotification('שגיאה בטעינת ספריות', true);
+            }
+            
+            // בדיקה ש-Leaflet זמין
+            if (typeof L === 'undefined') {
+                console.error('Leaflet library not loaded');
+                showNotification('שגיאה בטעינת ספריית המפות', true);
+            }
         });
+
+        // הוספת מטפל שגיאות גלובלי
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            showNotification('שגיאה לא צפויה', true);
+        });
+    </script>
+</body>
+</html>
